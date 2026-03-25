@@ -41,14 +41,14 @@ A comprehensive collection of physics calculators for particle detector design a
 2. **Create and activate virtual environment**
    ```bash
    # Create virtual environment
-   python -m venv venv
+   python -m venv energy-deposits-env
 
    # Activate virtual environment
    # On macOS/Linux:
-   source venv/bin/activate
+   source energy-deposits-env/bin/activate
 
    # On Windows:
-   venv\Scripts\activate
+   energy-deposits-env\Scripts\activate
    ```
 
 3. **Install dependencies**
@@ -57,15 +57,32 @@ A comprehensive collection of physics calculators for particle detector design a
    pip install -r requirements.txt
    ```
 
-4. **Start Jupyter Lab**
+4. **Install Jupyter kernel (for automatic notebook environment selection)**
+   ```bash
+   python -m ipykernel install --user --name energy-deposits-env --display-name "Energy Deposits (Physics)"
+   ```
+
+5. **Start Jupyter Lab**
    ```bash
    jupyter lab
    ```
 
-5. **Open the notebooks**
+6. **Open the notebooks**
    - `bethe-bloch.ipynb` - Bethe-Bloch energy loss calculations
    - `neutrons.ipynb` - Neutron capture probability analysis
    - `photon.ipynb` - Photon interaction analysis
+
+   **Note**: The notebooks will automatically use the "Energy Deposits (Physics)" kernel. If not, select it manually from the kernel menu in Jupyter Lab.
+
+## Environment & Kernel Setup
+
+The project uses a dedicated Python environment called `energy-deposits-env` with a custom Jupyter kernel:
+
+- **Environment name**: `energy-deposits-env`
+- **Jupyter kernel**: "Energy Deposits (Physics)"
+- **Auto-selection**: Notebooks are configured to use this kernel automatically
+- **SciPy included**: All required physics libraries including SciPy are pre-installed
+- **Modular architecture**: Heavy calculations moved to `lib.py` for clean notebook interface
 
 ## Usage Examples
 
@@ -142,7 +159,8 @@ P = 1 - exp(-Σt)  where  Σ = n·σ(E)
 particle-detectors/
 ├── README.md              # This file
 ├── requirements.txt       # Python dependencies
-├── venv/                  # Virtual environment (created during setup)
+├── lib.py                 # Physics library with calculation functions
+├── energy-deposits-env/   # Virtual environment (created during setup)
 ├── bethe-bloch.ipynb     # Interactive Bethe-Bloch calculator
 ├── neutrons.ipynb        # Neutron capture analysis
 ├── photon.ipynb          # Photon interaction analysis
