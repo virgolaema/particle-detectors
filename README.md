@@ -62,17 +62,34 @@ A comprehensive collection of physics calculators for particle detector design a
    python -m ipykernel install --user --name energy-deposits-env --display-name "Energy Deposits (Physics)"
    ```
 
-5. **Start Jupyter Lab**
+5. **Open in your preferred environment**
+
+   **For Jupyter Lab:**
    ```bash
    jupyter lab
    ```
+
+   **For VS Code:**
+   ```bash
+   code .
+   ```
+   Then open any `.ipynb` file and select the kernel as described below.
 
 6. **Open the notebooks**
    - `bethe-bloch.ipynb` - Bethe-Bloch energy loss calculations
    - `neutrons.ipynb` - Neutron capture probability analysis
    - `photon.ipynb` - Photon interaction analysis
 
-   **Note**: The notebooks will automatically use the "Energy Deposits (Physics)" kernel. If not, select it manually from the kernel menu in Jupyter Lab.
+## Kernel Selection
+
+### **In VS Code:**
+1. Open any notebook (`.ipynb` file)
+2. Click on the kernel selector in the top-right corner
+3. Select **"Energy Deposits (Physics)"** from the list
+4. VS Code will remember this choice for future sessions
+
+### **In Jupyter Lab:**
+The notebooks are pre-configured to use the "Energy Deposits (Physics)" kernel automatically. If not, select it manually from the kernel menu.
 
 ## Environment & Kernel Setup
 
@@ -80,9 +97,28 @@ The project uses a dedicated Python environment called `energy-deposits-env` wit
 
 - **Environment name**: `energy-deposits-env`
 - **Jupyter kernel**: "Energy Deposits (Physics)"
-- **Auto-selection**: Notebooks are configured to use this kernel automatically
 - **SciPy included**: All required physics libraries including SciPy are pre-installed
 - **Modular architecture**: Heavy calculations moved to `lib.py` for clean notebook interface
+
+### VS Code Integration
+
+VS Code's Jupyter extension will automatically detect the installed kernel:
+
+1. **Kernel Selection**: Click the kernel selector (top-right in notebook) → choose "Energy Deposits (Physics)"
+2. **Auto-completion**: VS Code will remember your kernel choice
+3. **IntelliSense**: Full code completion and error detection with the physics library
+4. **Debugging**: Built-in debugging support for the physics calculations
+
+### Troubleshooting VS Code
+
+If the kernel doesn't appear in VS Code:
+1. **Restart VS Code** after kernel installation
+2. **Refresh kernels**: Open Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) → "Python: Refresh Kernels"
+3. **Check Jupyter extension**: Ensure Jupyter extension is installed and enabled
+4. **Verify kernel**: Run `source energy-deposits-env/bin/activate && jupyter kernelspec list`
+5. **Reinstall kernel** if needed: `python -m ipykernel install --user --name energy-deposits-env --display-name "Energy Deposits (Physics)" --force`
+
+**Note**: If you move/rename the project directory, you may need to reinstall the kernel to update its Python path.
 
 ## Usage Examples
 
