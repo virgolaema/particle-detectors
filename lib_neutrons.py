@@ -7,7 +7,7 @@ analysis and simulation functions.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, PchipInterpolator
 
 from lib import (
     NuclearDatabase,
@@ -528,48 +528,70 @@ def tof_with_moderation(E_initial_eV, hdpe_thickness_cm, air_gap_cm=10.0,
 # ⚠️ Fine resonance structure is smoothed over; accuracy ~10-20%.
 
 ENDF_H1_DATA = np.array([
-    [1.0e-3,  164.0], [1.0e-2,  51.9], [1.0e-1,  16.4], [1.0,   5.19],
-    [10.0,    10.5],  [100.0,   17.8], [1.0e3,   20.0], [1.0e4, 11.5],
-    [1.0e5,    5.8],  [2.0e5,    4.5], [5.0e5,    3.2], [1.0e6,  2.8],
-    [2.0e6,    2.2],  [3.0e6,    1.8], [5.0e6,    1.3], [8.0e6,  0.95],
-    [1.0e7,    0.85], [1.2e7,    0.80],
+    [1.0e-3,  20.50], [1.0e-2,  20.50], [1.0e-1,  20.50], [1.0,    20.47],
+    [10.0,    20.44], [100.0,   20.35], [1.0e3,   20.10], [1.0e4,  19.30],
+    [5.0e4,   15.90], [1.0e5,   12.90], [2.0e5,    9.40], [5.0e5,   6.24],
+    [1.0e6,    4.26], [2.0e6,    2.87], [2.45e6,   2.56], [3.0e6,   2.30],
+    [5.0e6,    1.61], [8.0e6,    1.14], [1.0e7,    0.95], [1.2e7,   0.83],
+])
+
+# Bound-atom enhancement for H chemically bound in a CH2 / PVT lattice.
+# As E -> 0 the neutron sees the whole molecule, so sigma -> ((A+1)/A)^2 = 4x
+# the free-atom value (thermal: 4 x 20.5 b = 82 b, the standard value for H in
+# polyethylene).  The enhancement dies away once E exceeds molecular binding
+# energies (~1 eV), above which the free-atom cross section applies.
+H_BOUND_MULTIPLIER = np.array([
+    [1.0e-3, 4.30], [1.0e-2, 4.15], [2.53e-2, 4.00], [1.0e-1, 2.70],
+    [1.0,    1.45], [5.0,    1.10], [2.0e1,   1.00], [1.2e7,  1.00],
 ])
 
 ENDF_C12_DATA = np.array([
-    [1.0e-3,  30.0], [1.0e-2,   9.49], [1.0e-1,  3.0], [1.0,   4.75],
-    [10.0,    4.74], [100.0,    4.75], [1.0e3,   4.75], [1.0e4, 4.74],
-    [5.0e4,   4.69], [1.0e5,    4.55], [2.0e5,   4.20], [5.0e5, 3.20],
-    [1.0e6,   2.75], [2.0e6,    2.20], [3.0e6,   1.95], [5.0e6, 1.65],
-    [8.0e6,   1.42], [1.0e7,    1.35], [1.2e7,   1.30],
+    [1.0e-3,   4.75], [1.0e-2,   4.75], [1.0e-1,  4.75], [1.0,    4.75],
+    [10.0,     4.75], [100.0,    4.75], [1.0e3,   4.75], [1.0e4,  4.74],
+    [5.0e4,    4.69], [1.0e5,    4.55], [2.0e5,   4.20], [5.0e5,  3.20],
+    [1.0e6,    2.61], [2.0e6,    2.20], [2.45e6,  2.07], [3.0e6,  1.95],
+    [5.0e6,    1.65], [8.0e6,    1.42], [1.0e7,   1.35], [1.2e7,  1.30],
 ])
 
+_H_INTERP = PchipInterpolator(np.log10(ENDF_H1_DATA[:, 0]),
+                              np.log10(ENDF_H1_DATA[:, 1]))
+_C_INTERP = PchipInterpolator(np.log10(ENDF_C12_DATA[:, 0]),
+                              np.log10(ENDF_C12_DATA[:, 1]))
+_H_BOUND_INTERP = PchipInterpolator(np.log10(H_BOUND_MULTIPLIER[:, 0]),
+                                    H_BOUND_MULTIPLIER[:, 1])
 
-def get_endf_cross_sections(E_eV):
+
+def get_endf_cross_sections(E_eV, bound_H=True):
     """
-    H-1 and C-12 cross-sections via cubic-spline interpolation of ENDF data.
+    H-1 and C-12 elastic scattering cross-sections from ENDF/B-VIII.0.
+
+    Interpolation is PCHIP (shape-preserving) in log-log space.  A cubic
+    spline is *not* used here: on a sparse knot set it rings, and the previous
+    version of this function undershot to 5.2 b at 1 eV where the true H
+    elastic cross section is ~20.5 b.
 
     Parameters
     ----------
     E_eV : float or array-like
-        Neutron energy in eV
+        Neutron energy in eV.
+    bound_H : bool, default True
+        Apply the bound-atom enhancement to hydrogen (see
+        H_BOUND_MULTIPLIER).  Correct for H bound in a molecular solid --
+        polyethylene, PVT scintillator, wood -- which is every material in
+        this package.  Pass False for free/gaseous hydrogen.
 
     Returns
     -------
     sigma_H, sigma_C : ndarray
-        Total cross-sections in barns
+        Elastic scattering cross-sections in barns.
     """
     E_eV = np.atleast_1d(np.asarray(E_eV, dtype=float))
+    log_E = np.log10(np.clip(E_eV, 1.0e-3, 1.2e7))
 
-    interp_H = interp1d(np.log10(ENDF_H1_DATA[:, 0]),
-                        np.log10(ENDF_H1_DATA[:, 1]),
-                        kind='cubic', fill_value='extrapolate', bounds_error=False)
-    interp_C = interp1d(np.log10(ENDF_C12_DATA[:, 0]),
-                        np.log10(ENDF_C12_DATA[:, 1]),
-                        kind='cubic', fill_value='extrapolate', bounds_error=False)
-
-    log_E = np.log10(E_eV)
-    sigma_H = np.clip(10 ** interp_H(log_E), 0.5, 200)
-    sigma_C = np.clip(10 ** interp_C(log_E), 0.5, 50)
+    sigma_H = 10 ** _H_INTERP(log_E)
+    if bound_H:
+        sigma_H = sigma_H * _H_BOUND_INTERP(log_E)
+    sigma_C = 10 ** _C_INTERP(log_E)
     return sigma_H, sigma_C
 
 
