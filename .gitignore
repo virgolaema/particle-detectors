@@ -26,3 +26,8 @@ Thumbs.db
 # Generated output (figures regenerated from notebooks)
 projects/*/output/
 notebooks/output/
+
+# MC caches and pickled state in projects/pns (regenerate: see projects/pns/NOTES.md)
+projects/pns/_*.npz
+projects/pns/_*.pkl
+projects/pns/*.bak_hfix

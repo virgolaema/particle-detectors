@@ -24,6 +24,16 @@ A comprehensive collection of physics calculators for particle detector design a
 - **Attenuation coefficient calculations**
 - **Beer-Lambert law implementation**
 
+## Projects
+
+### PNS boron-capture Monte Carlo (`projects/pns/`)
+Neutron + gamma MC of the pulsed-neutron-source test of a boron-loaded plastic
+tile behind a borated-HDPE shield: 3-D transport with the real bench geometry,
+capture-vertex gamma transport into the tile, predicted delayed charge spectrum
+and die-away compared with data. See `projects/pns/README.md`, and the reviews
+`HYDROGEN.md` / `GAMMA_MC.md` there. Data analysis lives in
+https://github.com/virgolaema/3det-pns-neutron-ana.
+
 ## Quick Start
 
 ### Prerequisites

@@ -6,6 +6,46 @@ Personal/working notes for the PNS neutron MC. Not part of the LaTeX note in
 
 ---
 
+## 2026-08-18 — cross-cube coincidence + hydrogen capture channel
+
+Three additions, each written as a standalone script (same replay-the-notebook
+convention as `tof_delay_scan.py`) plus report figures and text.
+
+**1. `cube_coincidence.py` — segmented 3x3x1 tile.** Photon MC of the 478 keV
+capture gamma in a nine-cube (1 cm^3 each) tile; the alpha is point-like and
+stays in its cube. Klein-Nishina Compton tracking. Key result: only **3.7 %** of
+captures give a gamma deposit in a cube *other* than the alpha cube (3.2 % above
+50 keV); **92 %** of gammas escape the tile entirely, because mfp = 10.2 cm >>
+1 cm. Robust to capture profile (3.5 % front-biased). Figures
+`cube_coincidence_outcomes.png`, `cube_coincidence_map.png`. New report section
+`06_segmentation.tex`.
+  - NB: the 478 keV attenuation is taken from Klein-Nishina directly
+    (mu = 0.098/cm), NOT from `lib_photon`'s NIST polyethylene table, which is
+    ~4x too low at 0.5 MeV (gives mu/rho 0.023 where KN and the water value put
+    it at ~0.096 cm^2/g). Worth fixing in lib_photon eventually.
+
+**2 + 3. `scint_hcapture.py` — H(n,gamma) in C8H8 and the interaction budget.**
+Treats the plastic as pure C8H8 (n_H = n_C = 4.86e22 /cm^3). Figures:
+  - `pns_hcapture_xsec.png`: sigma(E) for H(n,gamma) (1/v, 332 mb th), H and C
+    elastic. H capture is ~250x below H elastic even at thermal.
+  - `pns_tof_xsec_overlay.png`: arrival ToF spectrum with H-capture sigma
+    overlaid — arrivals are fast (short ToF, low sigma); sigma only large in the
+    slow tail.
+  - `pns_interactions_by_energy.png`: arriving spectrum x single-pass p(E) per
+    process, log-y. Elastic (fast-peaked) vs H(n,gamma) (thermal-peaked), ~10^3
+    apart.
+  - Numbers: single-pass H-capture chance per arriving neutron = **0.021 %**
+    (both samples); elastic = 36 %. In the borated tile H(n,gamma) is ~1.6 % of
+    captures (Sigma_a ratio B:H ~ 60:1) — a minor 2223 keV contamination.
+  Added as subsection `\label{sec:hcapture}` in `04_scintillator.tex`.
+
+Regenerate: run both scripts in `projects/pns/`, then
+`cp pns_*.png cube_*.png ../../../pns-3det-notes/figures/` and rebuild the note
+(`bash compile.sh`). The scripts read `_mc_state.pkl` (arriving spectrum, dumped
+by `_dump_state.py`, replay to cell `1bc91a56`) or replay the notebook live.
+
+---
+
 ## 2026-08-06 — the MC was answering the wrong question
 
 Triggered by review feedback on why the MC predicted a delayed thermal bump
@@ -181,3 +221,131 @@ the 14× from the time-resolved cell.
 - [ ] Neutron albedo off the light guide / wrapping is not modelled; it would
       lengthen λ and raise the efficiency, and is the other candidate for the
       20 % residual.
+
+---
+
+## 2026-08-24 — H-capture bug fix + Sample B report plots
+
+**Bug found in the shield MC (pns.ipynb cell 2):** H radiative capture was a
+flat `ABSORPTION_PROB = 2%` per H-scatter at *every* energy. H(n,gamma) is 1/v
+(0.332 b thermal), so that probability is right only AT thermal and ~1e-4
+during slowdown; with ~18 slowdown collisions the flat hack killed ~23% of all
+neutrons mid-moderation. Also Fe(n,gamma) captures in Sample B's steel were
+lumped into "H capture".
+
+**Fix (`sampleB_fixed_mc.py`, standalone):** H is a proper 1/v absorber in
+every H-bearing layer (competing in Sigma_tot with B-10 / Fe); Fe captures are
+their own fate. Validation: analytic thermal branching B10:(B10+H) in B-HDPE =
+98.8%, MC gives 98.8%.
+
+**Sample B fates, old -> fixed (100k, seed 20260724):**
+transmitted 6.6 -> 6.9% | backscattered 16.0 -> 17.6% |
+B-10 capture 53.9 -> 74.6% | H capture 23.5 -> 0.9% | Fe 0.04%.
+Transmitted spectrum barely changes (soft tail slightly up): the wrongly-killed
+neutrons were destined for B-10 capture, not transmission.
+Fix PORTED into the notebook same day (cells 0, 2 and the gamma-depth MC in
+cell 12); _mc_state.pkl regenerated with the fixed physics (backup of the
+pre-fix notebook: pns.ipynb.bak_hfix). Fixed fates: A 7.75% transm / 73.8%
+B-10; B 6.88% / 74.5%. TOF figure reworked to FIRST-interaction branching
+(Sigma_i/Sigma_tot x (1-exp(-Sigma_tot L)) — independent 1-exp(-Sigma_i L)
+curves double-count) plus a visible-scatter curve (E_n > 100 keV): late
+thermal arrivals scatter a lot but deposit nothing visible — TOF>10 us
+expects ~21 captures vs ~0 visible scatters per 100k emitted.
+
+**New figures:** `sampleB_spectrum.png` (2.1% th / 20.7% epi / 77.2% fast at
+the tile), `sampleB_fates.png`, `sampleB_tof_interactions.png` (TOF 14 ns
+fast peak -> ~90 us thermal bump incl. 14.5 cm air; flux x p_capture peaks at
+the thermal bump, p_cap(1 cm tile) up to 62% thermal, p_scat ~70-99%).
+Fixed-MC state cached in `_mc_state_fixedB.pkl`.
+
+---
+
+## 2026-08-24 (later) — making the MC reproduce the measured timing
+
+**No-bump check (data):** 20260731 period-500us run, tau to 175 us: rate in the
+MC ballistic-drift window (55-115 us) = 7.65/us vs flat 7.42/us -> +0.4 sigma.
+The single-pass drift channel is NOT in the data.
+
+**Diagnosis:** (1) OVERESTIMATED - the 1-D MC counts every transmitted neutron
+as "arriving at the tile"; diffuse (thermalised) exits have ~1% chance of
+hitting a 3x3 cm tile at 15 cm vs ~10-50x more for forward fast punch-through
+-> slow arrivals suppressed 10-100x -> no drift bump, consistent with data.
+(2) MISSING - shield-capture GAMMAS: 74% of cone neutrons capture in the
+shield; the 478 keV gammas reach the tile at light speed carrying the shield's
+capture-time profile (median 1.3 us, mean 2.0 us: thermalisation + 2 us dwell
+at 5% B). (3) MISSING - local moderation feeding tile captures on the tile
+dwell clock (2.8-4.7 us).
+
+**Composite fit (`composite_timing.py`, fit tau>1.5us on the 20260731 run):**
+shield-gamma shape straight from the MC clock (NO free shape parameter) +
+tile-dwell exponential + flat:  chi2/ndf = 43/39, split 83% shield-gamma /
+17% tile (lambda_tile = 6.8+-3.3 us). Model comparison: shield-only 61/41,
+tile-only 46/40 (lambda 2.50+-0.16). Degenerate-ish but composite preferred;
+MATCHES the data-side finding that the delayed excess is mostly capture
+gammas with ~half of the alpha-slice PSD-tagged.
+
+**Implication:** the measured die-away rate is NOT the tile capture rate — it
+is dominated by shield-capture gammas Compton-scattering in the tile; the
+alpha-tagged count is the clean tile-capture number. Boron-loading inference
+from lambda must use the composite, not a single exponential.
+
+**Next for full reproduction:** upgrade shield MC to 3-D (track position +
+direction, ray-trace to the tile) for honest arrival weights and absolute
+rates; add a minimal local-moderation stage (tile + shield-face cavity).
+
+**2026-08-24 (later still) — real bench geometry + 3-D MC (`sampleB_mc3d.py`):**
+true stack (user): 14 B-HDPE / 1 wood / 5 air / 1 steel / 2 air, tile at 23 cm.
+3-D tracking + ray-trace to the 3x3 cm tile. Acceptance nearly energy-uniform
+(fast 2.9%, epi 1.8%, thermal 1.8%): ALL exits are diffuse, so acceptance is a
+~x40 absolute scale factor, not a shape cut (earlier "slow exits miss more"
+intuition was wrong). With only 7 cm air the thermal drift compresses: the
+isolated 66-110 us bump of the planned 15 cm standoff disappears; the direct-
+arrival capture channel becomes a LOW BROAD 1-70 us component — matching the
+small ~3 sigma excess the data shows at 15-35 us (9.8 vs 7.4 flat /us) and the
+55-115 us null. Visible scatters all <70 ns. Fates: 7.2 tran / 20.0 back /
+71.8 B10 / 0.9 H / 0.1 Fe. Per 1M cone-emitted: 6.4 direct captures, 360
+visible scatters. Full picture: die-away 0-10 us = shield gammas + locally
+moderated captures; 15-35 us tail = direct slow arrivals; flat = ambient.
+
+## 2026-08-26 — hydrogen review and the gamma-level MC
+
+Two written reviews now sit next to the code, both driven by a factor-10 puzzle
+(the MC predicted 10-50 fast-neutron recoil triggers per tile capture, the data
+show ~2.6) and by the new measured tile energy scale (478 keV Compton edge fitted
+at 2.75 V ns -> 113 keVee/V ns, alpha+7Li ~71 keVee; the adopted 85 keVee is retired).
+
+**`HYDROGEN.md`** (`h_hydrogen.py`, cross-checks in `checks/`): H in the shield
+takes 1/80.5 of the captures (0.89 %, the MC's 0.90 % is exact arithmetic); the
+thermal diffusion length in the borated block is 0.24 cm, so the shield emits
+gammas, not thermal neutrons. In the tile H takes 1.8 % of thermal captures.
+With Birks (kB = 0.0125) the 47 keVee trigger is a 404 keV proton, so the MC's
+50 keV recoil cut was 8x too low; the recoil:capture ratio goes 54 -> 21 (light
+threshold) -> 3.8 (tile treated as a moderator, not an attenuator) against 2.6
+measured once the in-gate window is counted correctly (tau_rise-based). Room
+return is not needed.
+
+**`GAMMA_MC.md`** (`sampleB_gamma.py`, ~20 s): capture vertices re-recorded
+(4M n), photon transport with buildup, full in-tile cascade with electron escape,
+time-resolved neutron walk in the tile, and the SAME delayed-minus-late
+subtraction as the data. Verdicts: (a) H-capture gammas are 1.07 % of tile
+gamma interactions -- negligible, and 78x too few to be the hard tail; (b) the
+MC reproduces the delayed spectrum below the 478 keV edge to x1.3-1.7 (a 20 deg
+-> ~28 deg illuminated cone closes the normalisation) but is x12 low above the
+edge and x82 low above the 4.4 V ns clip, where the data put 21 % of the
+excess; the timing is reproduced by neither MC component (shield-gamma clock
+1.8 us vs 4.1 measured; tile capture 11.8 vs 3.3); (c) the ranked explanation
+is (n,gamma) on structure ADJACENT to the tile (Fe/Al holder, bracket, bench)
+fed by the missed-tile flux, which is 37x the flux reaching the tile: 3.2 % of
+it capturing next to the tile supplies the hard excess with the right few-us
+local clock. Excluded with numbers: pile-up, the modelled steel plate, room
+return, albedo, H. The MC's world must not end at the tile plane.
+
+The July-31 run (500 us period) IS reproduced by the shield-capture clock
+(72 % share); every August run rejects it and decays with 3.5-3.8 us on both
+tiles, independent of period (same-day 500/50 us test on Aug 18). Whatever
+holds the tile is the leading suspect for both the hard tail and the slow
+clock; it changed between the two campaigns.
+
+Caches (`_*.npz`, `_*.pkl`) are git-ignored; `sampleB_mc3d.py` regenerates
+`_mc3d_cache.npz` (10M neutrons, ~hours) and `sampleB_gamma.py` its own
+`_gam_*.npz` in seconds.
